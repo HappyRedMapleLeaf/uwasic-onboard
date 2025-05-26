@@ -52,11 +52,14 @@ reg [4:0] rx_bit_count = 0;
 reg [15:0] rx_data = 0;
 reg reading = 0;
 
-reg [3:0] flags = 0; // 3: reset 2: spi clock rising edge (poll data), 1: cs falling edge (start reading), 0: cs rising edge (end reading)
+reg f_reset = 0;
+reg f_clk_rise = 0;
+reg f_cs_fall = 0;
+reg f_cs_rise = 0;
 
 always @(posedge m_clk)
 begin
-    if (flags[3] == 1) begin
+    if (f_reset == 1) begin
         reg_0 <= 8'h00;
         reg_1 <= 8'h00;
         reg_2 <= 8'h00;
@@ -67,7 +70,7 @@ begin
         rx_data <= 0;
 
         reading <= 0;
-    end else if (flags[0] == 1) begin
+    end else if (f_cs_rise == 1) begin
         // ignore invalid length transaction and reads
         if (rx_bit_count == 16 && rx_data[15] == 1) begin
             // Process the received data
@@ -84,38 +87,42 @@ begin
         rx_bit_count <= 0;
         rx_data <= 0;
         reading <= 0;
-    end else if (flags[1] == 1) begin
+    end else if (f_cs_fall == 1) begin
         rx_bit_count <= 0;
         rx_data <= 0;
         reading <= 1;
-    end else if (flags[2] == 1) begin
+    end else if (f_clk_rise == 1) begin
         if (rx_bit_count < 16 && reading == 1) begin
             rx_bit_count <= rx_bit_count + 1;
             rx_data <= {rx_data[14:0], data};
         end
     end
 
-    flags = 0; // reset all flags
+    // reset all flags
+    f_reset <= 0;
+    f_clk_rise <= 0;
+    f_cs_fall <= 0;
+    f_cs_rise <= 0;
 end
 
 always @(negedge rst_n)
 begin
-    flags[3] <= 1;
+    f_reset <= 1;
 end
 
 always @(posedge s_clk)
 begin
-    flags[2] <= 1;
+    f_clk_rise <= 1;
 end
 
 always @(negedge cs)
 begin
-    flags[1] <= 1;
+    f_cs_fall <= 1;
 end
 
 always @(posedge cs)
 begin
-    flags[0] <= 1;
+    f_cs_rise <= 1;
 end
 
 endmodule
