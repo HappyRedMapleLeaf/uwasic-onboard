@@ -36,60 +36,86 @@ endmodule
 
 
 module spi_peripheral (
-    input  wire       clk,      // spi clock, not master clock
-    input  wire       data,
-    input  wire       cs,
-    input  wire       rst_n,    // reset_n - low to reset
-    output reg [7:0]  reg_0,
-    output reg [7:0]  reg_1,
-    output reg [7:0]  reg_2,
-    output reg [7:0]  reg_3,
-    output reg [7:0]  reg_4,
+    input wire       m_clk,      // master clock
+    input wire       s_clk,      // spi clock
+    input wire       data,
+    input wire       cs,
+    input wire       rst_n,    // reset_n - low to reset
+    output reg [7:0] reg_0,
+    output reg [7:0] reg_1,
+    output reg [7:0] reg_2,
+    output reg [7:0] reg_3,
+    output reg [7:0] reg_4
 );
 
 reg [4:0] rx_bit_count = 0;
 reg [15:0] rx_data = 0;
+reg reading = 0;
+
+reg flags [3:0] = 0; // 3: reset 2: spi clock rising edge (poll data), 1: cs falling edge (start reading), 0: cs rising edge (end reading)
+
+always @(posedge m_clk)
+begin
+    if (flags[3] == 1) begin
+        reg_0 <= 8'h00;
+        reg_1 <= 8'h00;
+        reg_2 <= 8'h00;
+        reg_3 <= 8'h00;
+        reg_4 <= 8'h00;
+
+        rx_bit_count <= 0;
+        rx_data <= 0;
+
+        reading <= 0;
+    end else if (flags[0] == 1) begin
+        // ignore invalid length transaction and reads
+        if (rx_bit_count == 16 && rx_data[15] == 1) begin
+            // Process the received data
+            case (rx_data[14:8])
+                7'b0000000: reg_0 <= rx_data[7:0];
+                7'b0000001: reg_1 <= rx_data[7:0];
+                7'b0000010: reg_2 <= rx_data[7:0];
+                7'b0000011: reg_3 <= rx_data[7:0];
+                7'b0000100: reg_4 <= rx_data[7:0];
+                default: ; // Ignore other addresses
+            endcase
+        end
+
+        rx_bit_count <= 0;
+        rx_data <= 0;
+        reading <= 0;
+    end else if (flags[1] == 1) begin
+        rx_bit_count <= 0;
+        rx_data <= 0;
+        reading <= 1;
+    end else if (flags[2] == 1) begin
+        if (rx_bit_count < 16 && reading == 1) begin
+            rx_bit_count <= rx_bit_count + 1;
+            rx_data <= {rx_data[14:0], data};
+        end
+    end
+
+    flags = 0; // reset all flags
+end
 
 always @(negedge rst_n)
 begin
-    reg_0 <= 8'h00;
-    reg_1 <= 8'h00;
-    reg_2 <= 8'h00;
-    reg_3 <= 8'h00;
-    reg_4 <= 8'h00;
-
-    rx_bit_count <= 0;
-    rx_data <= 0;
+    flags[3] <= 1;
 end
 
-always @(posedge clk)
+always @(posedge s_clk)
 begin
-    if (rx_bit_count < 16 && !cs) begin
-        rx_bit_count <= rx_bit_count + 1;
-        rx_data = (rx_data << 1) | data;
-    end
+    flags[2] <= 1;
 end
 
 always @(negedge cs)
 begin
-    rx_bit_count <= 0;
-    rx_data <= 0;
+    flags[1] <= 1;
 end
 
 always @(posedge cs)
 begin
-    // ignore invalid length transaction and reads
-    if (rx_bit_count == 16 && rx_data[15] == 1) begin
-        // Process the received data
-        case (rx_data[14:8])
-            7'b0000000: reg_0 <= rx_data[7:0];
-            7'b0000001: reg_1 <= rx_data[7:0];
-            7'b0000010: reg_2 <= rx_data[7:0];
-            7'b0000011: reg_3 <= rx_data[7:0];
-            7'b0000100: reg_4 <= rx_data[7:0];
-            default: ; // Ignore other addresses
-        endcase
-    end
+    flags[0] <= 1;
 end
 
 endmodule
