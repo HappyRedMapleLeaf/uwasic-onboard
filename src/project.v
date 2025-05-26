@@ -40,7 +40,8 @@ module tt_um_uwasic_onboarding_evan_li (
   );
 
   spi_peripheral spi_peripheral_inst (
-    .clk(synch_clk),
+    .m_clk(clk),
+    .s_clk(synch_clk),
     .data(synch_data),
     .cs(synch_cs),
     .rst_n(rst_n),
