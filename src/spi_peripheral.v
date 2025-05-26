@@ -52,7 +52,7 @@ reg [4:0] rx_bit_count = 0;
 reg [15:0] rx_data = 0;
 reg reading = 0;
 
-reg flags [3:0] = 0; // 3: reset 2: spi clock rising edge (poll data), 1: cs falling edge (start reading), 0: cs rising edge (end reading)
+reg [3:0] flags = 0; // 3: reset 2: spi clock rising edge (poll data), 1: cs falling edge (start reading), 0: cs rising edge (end reading)
 
 always @(posedge m_clk)
 begin
