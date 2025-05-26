@@ -39,7 +39,7 @@ module spi_peripheral (
     input  wire       clk,      // spi clock, not master clock
     input  wire       data,
     input  wire       cs,
-    input  wire       rst_n     // reset_n - low to reset
+    input  wire       rst_n,    // reset_n - low to reset
     output reg [7:0]  reg_0,
     output reg [7:0]  reg_1,
     output reg [7:0]  reg_2,
