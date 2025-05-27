@@ -19,11 +19,11 @@ module tt_um_uwasic_onboarding_evan_li (
   assign uio_oe = 8'hFF; // Set all IOs to output
   
   // Create wires to refer to the values of the registers
-  wire [7:0] en_reg_out_7_0;
-  wire [7:0] en_reg_out_15_8;
-  wire [7:0] en_reg_pwm_7_0;
-  wire [7:0] en_reg_pwm_15_8;
-  wire [7:0] pwm_duty_cycle;
+  wire [7:0] en_reg_out_7_0 = 0;
+  wire [7:0] en_reg_out_15_8 = 0;
+  wire [7:0] en_reg_pwm_7_0 = 0;
+  wire [7:0] en_reg_pwm_15_8 = 0;
+  wire [7:0] pwm_duty_cycle = 0;
 
   wire synch_clk;
   wire synch_data;
@@ -41,9 +41,9 @@ module tt_um_uwasic_onboarding_evan_li (
 
   spi_peripheral spi_peripheral_inst (
     .m_clk(clk),
-    .s_clk(synch_clk),
-    .data(synch_data),
-    .cs(synch_cs),
+    .s_clk_synch(synch_clk),
+    .data_synch(synch_data),
+    .cs_synch(synch_cs),
     .rst_n(rst_n),
     .reg_0(en_reg_out_7_0),
     .reg_1(en_reg_out_15_8),
