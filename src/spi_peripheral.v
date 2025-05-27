@@ -37,9 +37,9 @@ endmodule
 
 module spi_peripheral (
     input wire       m_clk,      // master clock
-    input wire       s_clk,      // spi clock
-    input wire       data,
-    input wire       cs,
+    input wire       s_clk_synch,      // spi clock
+    input wire       data_synch,
+    input wire       cs_synch,
     input wire       rst_n,     // reset_n - low to reset
     output reg [7:0] reg_0,
     output reg [7:0] reg_1,
@@ -54,16 +54,10 @@ reg reading = 0;
 
 reg prev_cs = 1;
 reg prev_s_clk = 1;
-reg prev_rst_n = 1;
 
-reg f_reset = 0;
-reg f_clk_rise = 0;
-reg f_cs_fall = 0;
-reg f_cs_rise = 0;
-
-always @(posedge m_clk)
+always @(posedge m_clk or negedge rst_n)
 begin
-    if (rst_n == 0 && prev_rst_n == 1) begin
+    if (!rst_n) begin
         reg_0 <= 8'h00;
         reg_1 <= 8'h00;
         reg_2 <= 8'h00;
@@ -74,7 +68,7 @@ begin
         rx_data <= 0;
 
         reading <= 0;
-    end else if (cs == 1 && prev_cs == 0) begin
+    end else if (cs_synch && !prev_cs) begin
         // ignore invalid length transaction and reads
         if (rx_bit_count == 16 && rx_data[15] == 1) begin
             // Process the received data
@@ -91,20 +85,19 @@ begin
         rx_bit_count <= 0;
         rx_data <= 0;
         reading <= 0;
-    end else if (cs == 0 && prev_cs == 1) begin
+    end else if (!cs_synch && prev_cs) begin
         rx_bit_count <= 0;
         rx_data <= 0;
         reading <= 1;
-    end else if (s_clk == 1 && prev_s_clk == 0) begin
+    end else if (s_clk_synch && !prev_s_clk) begin
         if (rx_bit_count < 16 && reading == 1) begin
             rx_bit_count <= rx_bit_count + 1;
-            rx_data <= {rx_data[14:0], data};
+            rx_data <= {rx_data[14:0], data_synch};
         end
     end
 
-    prev_cs <= cs;
-    prev_s_clk <= s_clk;
-    prev_rst_n <= rst_n;
+    prev_cs <= cs_synch;
+    prev_s_clk <= s_clk_synch;
 end
 
 endmodule
