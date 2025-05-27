@@ -68,6 +68,9 @@ begin
         rx_data <= 0;
 
         reading <= 0;
+
+        prev_cs <= 1;
+        prev_s_clk <= 1;
     end else if (cs_synch && !prev_cs) begin
         // ignore invalid length transaction and reads
         if (rx_bit_count == 16 && rx_data[15] == 1) begin
