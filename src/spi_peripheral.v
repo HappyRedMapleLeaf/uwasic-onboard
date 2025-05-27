@@ -40,7 +40,7 @@ module spi_peripheral (
     input wire       s_clk,      // spi clock
     input wire       data,
     input wire       cs,
-    input wire       rst_n,    // reset_n - low to reset
+    input wire       rst_n,     // reset_n - low to reset
     output reg [7:0] reg_0,
     output reg [7:0] reg_1,
     output reg [7:0] reg_2,
@@ -52,6 +52,10 @@ reg [4:0] rx_bit_count = 0;
 reg [15:0] rx_data = 0;
 reg reading = 0;
 
+reg prev_cs = 1;
+reg prev_s_clk = 1;
+reg prev_rst_n = 1;
+
 reg f_reset = 0;
 reg f_clk_rise = 0;
 reg f_cs_fall = 0;
@@ -59,7 +63,7 @@ reg f_cs_rise = 0;
 
 always @(posedge m_clk)
 begin
-    if (f_reset == 1) begin
+    if (rst_n == 0 && prev_rst_n == 1) begin
         reg_0 <= 8'h00;
         reg_1 <= 8'h00;
         reg_2 <= 8'h00;
@@ -70,7 +74,7 @@ begin
         rx_data <= 0;
 
         reading <= 0;
-    end else if (f_cs_rise == 1) begin
+    end else if (cs == 1 && prev_cs == 0) begin
         // ignore invalid length transaction and reads
         if (rx_bit_count == 16 && rx_data[15] == 1) begin
             // Process the received data
@@ -87,42 +91,20 @@ begin
         rx_bit_count <= 0;
         rx_data <= 0;
         reading <= 0;
-    end else if (f_cs_fall == 1) begin
+    end else if (cs == 0 && prev_cs == 1) begin
         rx_bit_count <= 0;
         rx_data <= 0;
         reading <= 1;
-    end else if (f_clk_rise == 1) begin
+    end else if (s_clk == 1 && prev_s_clk == 0) begin
         if (rx_bit_count < 16 && reading == 1) begin
             rx_bit_count <= rx_bit_count + 1;
             rx_data <= {rx_data[14:0], data};
         end
     end
 
-    // reset all flags
-    f_reset <= 0;
-    f_clk_rise <= 0;
-    f_cs_fall <= 0;
-    f_cs_rise <= 0;
-end
-
-always @(negedge rst_n)
-begin
-    f_reset <= 1;
-end
-
-always @(posedge s_clk)
-begin
-    f_clk_rise <= 1;
-end
-
-always @(negedge cs)
-begin
-    f_cs_fall <= 1;
-end
-
-always @(posedge cs)
-begin
-    f_cs_rise <= 1;
+    prev_cs <= cs;
+    prev_s_clk <= s_clk;
+    prev_rst_n <= rst_n;
 end
 
 endmodule
