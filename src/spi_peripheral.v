@@ -73,7 +73,7 @@ begin
         prev_s_clk <= 1'b1;
     end else if (cs_synch && !prev_cs) begin
         // ignore invalid length transaction and reads
-        if (rx_bit_count == 16 && rx_data[15] == 1) begin
+        if (rx_bit_count == 16 && rx_data[15] == 1'b1) begin
             // Process the received data
             case (rx_data[14:8])
                 7'b0000000: reg_0 <= rx_data[7:0];
@@ -88,19 +88,22 @@ begin
         rx_bit_count <= 0;
         rx_data <= 0;
         reading <= 0;
+        prev_cs <= cs_synch;
+        prev_s_clk <= s_clk_synch;
     end else if (!cs_synch && prev_cs) begin
         rx_bit_count <= 0;
         rx_data <= 0;
-        reading <= 1;
+        reading <= 1'b1;
+        prev_cs <= cs_synch;
+        prev_s_clk <= s_clk_synch;
     end else if (s_clk_synch && !prev_s_clk) begin
-        if (rx_bit_count < 16 && reading == 1) begin
+        if (rx_bit_count < 16 && reading == 1'b1) begin
             rx_bit_count <= rx_bit_count + 1;
             rx_data <= {rx_data[14:0], data_synch};
         end
+        prev_cs <= cs_synch;
+        prev_s_clk <= s_clk_synch;
     end
-
-    prev_cs <= cs_synch;
-    prev_s_clk <= s_clk_synch;
 end
 
 endmodule
