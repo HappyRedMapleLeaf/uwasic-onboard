@@ -64,8 +64,8 @@ begin
         reg_3 <= 8'h00;
         reg_4 <= 8'h00;
 
-        rx_bit_count <= 1'b1;
-        rx_data <= 1'b0;
+        rx_bit_count <= 0;
+        rx_data <= 0;
 
         reading <= 1'b0;
 
