@@ -64,13 +64,13 @@ begin
         reg_3 <= 8'h00;
         reg_4 <= 8'h00;
 
-        rx_bit_count <= 0;
-        rx_data <= 0;
+        rx_bit_count <= 1'b1;
+        rx_data <= 1'b0;
 
-        reading <= 0;
+        reading <= 1'b0;
 
-        prev_cs <= 1;
-        prev_s_clk <= 1;
+        prev_cs <= 1'b1;
+        prev_s_clk <= 1'b1;
     end else if (cs_synch && !prev_cs) begin
         // ignore invalid length transaction and reads
         if (rx_bit_count == 16 && rx_data[15] == 1) begin
