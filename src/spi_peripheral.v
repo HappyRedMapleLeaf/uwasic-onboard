@@ -103,6 +103,9 @@ begin
         end
         prev_cs <= cs_synch;
         prev_s_clk <= s_clk_synch;
+    end else begin
+        prev_cs <= cs_synch;
+        prev_s_clk <= s_clk_synch;
     end
 end
 
