@@ -4,9 +4,13 @@
 import cocotb
 from cocotb.clock import Clock
 from cocotb.triggers import RisingEdge
+from cocotb.triggers import FallingEdge
 from cocotb.triggers import ClockCycles
-from cocotb.types import Logic
+from cocotb.triggers import with_timeout
 from cocotb.types import LogicArray
+from cocotb.utils import get_sim_time
+
+from cocotb.result import SimTimeoutError
 
 async def await_half_sclk(dut):
     """Wait for the SCLK signal to go high or low."""
@@ -151,7 +155,7 @@ async def test_spi(dut):
 
 @cocotb.test()
 async def test_pwm_freq(dut):
-    dut._log.info("Start PWM freq test")
+    dut._log.info("Start PWM Frequency test")
 
     # Set the clock period to 100 ns (10 MHz)
     clock = Clock(dut.clk, 100, units="ns")
@@ -170,19 +174,140 @@ async def test_pwm_freq(dut):
     await ClockCycles(dut.clk, 5)
 
     dut._log.info("Enable PWM on uo_out pin 0 - Write 0x01 to addr 0x02")
-    ui_in_val = await send_spi_transaction(dut, 1, 0x02, 0x01)  # Write transaction
+    ui_in_val = await send_spi_transaction(dut, 1, 0x02, 0x01)
     await ClockCycles(dut.clk, 30000)
     
     dut._log.info("Set 50% duty cycle - Write 0x80 to addr 0x04")
-    ui_in_val = await send_spi_transaction(dut, 1, 0x04, 0x80)  # Write transaction
+    ui_in_val = await send_spi_transaction(dut, 1, 0x04, 0x80)
     await ClockCycles(dut.clk, 30000)
 
-    
+    pwm_bit = dut.uo_out.get_slice(0, 1)
 
+    # 1ms is an arbitrary number lol
+    # Long enough that 3kHz definitely should produce a falling edge within this time
+    timeout_us = 1000
+
+    try:
+        await with_timeout(RisingEdge(pwm_bit), timeout_us, 'us')
+    except SimTimeoutError:
+        assert False, "Timed out waiting for first rising edge on pwm_bit"
+    t1 = get_sim_time(units="ps")
+
+    try:
+        await with_timeout(RisingEdge(pwm_bit), timeout_us, 'us')
+    except SimTimeoutError:
+        assert False, "Timed out waiting for second rising edge on pwm_bit"
+    t2 = get_sim_time(units="ps")
+
+    try:
+        await with_timeout(RisingEdge(pwm_bit), timeout_us, 'us')
+    except SimTimeoutError:
+        assert False, "Timed out waiting for third rising edge on pwm_bit"
+    t3 = get_sim_time(units="ps")
+
+    f1 = 1e12 / (t2 - t1)
+    f2 = 1e12 / (t3 - t2)
+
+    dut._log.info(f"Measured frequencies: f1={f1:.2f} Hz, f2={f2:.2f} Hz")
+    assert f1 > 2970 and f1 < 3030, f"first measured frequency out of expected range: {f1} Hz"
+    assert f2 > 2970 and f2 < 3030, f"second measured frequency out of expected range: {f2} Hz"
 
     dut._log.info("PWM Frequency test completed successfully")
 
 @cocotb.test()
 async def test_pwm_duty(dut):
+    dut._log.info("Start PWM Duty Cycle test")
+
+    # Wait value much longer than 3kHz period
+    timeout_us = 1000
+
+    # Set the clock period to 100 ns (10 MHz)
+    clock = Clock(dut.clk, 100, units="ns")
+    cocotb.start_soon(clock.start())
+
+    # Reset
+    dut._log.info("Reset")
+    dut.ena.value = 1
+    ncs = 1
+    bit = 0
+    sclk = 0
+    dut.ui_in.value = ui_in_logicarray(ncs, bit, sclk)
+    dut.rst_n.value = 0
+    await ClockCycles(dut.clk, 5)
+    dut.rst_n.value = 1
+    await ClockCycles(dut.clk, 5)
+
+    # 50% duty cycle test
+    dut._log.info("Enable PWM on uo_out pin 0 - Write 0x01 to addr 0x02")
+    ui_in_val = await send_spi_transaction(dut, 1, 0x02, 0x01)
+    await ClockCycles(dut.clk, 30000)
+    
+    dut._log.info("Set 50% duty cycle - Write 0x80 to addr 0x04")
+    ui_in_val = await send_spi_transaction(dut, 1, 0x04, 0x80)
+    await ClockCycles(dut.clk, 30000)
+
+    pwm_bit = dut.uo_out.get_slice(0, 1)
+
+    try:
+        await with_timeout(RisingEdge(pwm_bit), timeout_us, 'us')
+    except SimTimeoutError:
+        assert False, "Timed out waiting for first rising edge on pwm_bit"
+    t_rise_1 = get_sim_time(units="ps")
+
+    try:
+        await with_timeout(FallingEdge(pwm_bit), timeout_us, 'us')
+    except SimTimeoutError:
+        assert False, "Timed out waiting for first falling edge on pwm_bit"
+    t_fall_1 = get_sim_time(units="ps")
+
+    try:
+        await with_timeout(RisingEdge(pwm_bit), timeout_us, 'us')
+    except SimTimeoutError:
+        assert False, "Timed out waiting for second rising edge on pwm_bit"
+    t_rise_2 = get_sim_time(units="ps")
+
+    duty_cycle = (t_fall_1 - t_rise_1) / (t_rise_2 - t_rise_1)
+    dut._log.info(f"Measured duty cycle: {duty_cycle}%")
+    assert duty_cycle > 49 and duty_cycle < 51, f"measured duty cycle out of expected range: {duty_cycle}%"
+    
+
+    # 0% duty cycle test - always low
+    dut._log.info("Enable PWM on uo_out pin 0 - Write 0x01 to addr 0x02")
+    ui_in_val = await send_spi_transaction(dut, 1, 0x02, 0x01)
+    await ClockCycles(dut.clk, 30000)
+    
+    dut._log.info("Set 0% duty cycle - Write 0x00 to addr 0x04")
+    ui_in_val = await send_spi_transaction(dut, 1, 0x04, 0x00)
+    await ClockCycles(dut.clk, 30000)
+
+    assert dut.uo_out[0] == 0, f"Expected output low, got output high"
+
+    pwm_bit = dut.uo_out.get_slice(0, 1)
+
+    try:
+        await with_timeout(RisingEdge(pwm_bit), timeout_us, 'us')
+        assert False, f"Unexpected rising edge detected on uo_out[0] within {timeout_us} us"
+    except SimTimeoutError:
+        dut._log.info(f"No rising edge detected on uo_out[0] in {timeout_us} us. We good!")
+
+    # 100% duty cycle test - always high
+    dut._log.info("Enable PWM on uo_out pin 0 - Write 0x01 to addr 0x02")
+    ui_in_val = await send_spi_transaction(dut, 1, 0x02, 0x01)
+    await ClockCycles(dut.clk, 30000)
+    
+    dut._log.info("Set 100% duty cycle - Write 0xFF to addr 0x04")
+    ui_in_val = await send_spi_transaction(dut, 1, 0x04, 0xFF)
+    await ClockCycles(dut.clk, 30000)
+
+    assert dut.uo_out[0] == 1, f"Expected output high, got output low"
+
+    pwm_bit = dut.uo_out.get_slice(0, 1)
+
+    try:
+        await with_timeout(FallingEdge(pwm_bit), timeout_us, 'us')
+        assert False, f"Unexpected falling edge detected on uo_out[0] within {timeout_us} us"
+    except SimTimeoutError:
+        dut._log.info(f"No falling edge detected on uo_out[0] in {timeout_us} us. We good!")
+
     # Write your test here
     dut._log.info("PWM Duty Cycle test completed successfully")
