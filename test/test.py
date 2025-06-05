@@ -181,7 +181,7 @@ async def test_pwm_freq(dut):
     ui_in_val = await send_spi_transaction(dut, 1, 0x04, 0x80)
     await ClockCycles(dut.clk, 30000)
 
-    pwm_bit = dut.uo_out.get_slice(0, 1)
+    pwm_bit = dut.uo_out[0:1]
 
     # 1ms is an arbitrary number lol
     # Long enough that 3kHz definitely should produce a falling edge within this time
@@ -246,7 +246,7 @@ async def test_pwm_duty(dut):
     ui_in_val = await send_spi_transaction(dut, 1, 0x04, 0x80)
     await ClockCycles(dut.clk, 30000)
 
-    pwm_bit = dut.uo_out.get_slice(0, 1)
+    pwm_bit = dut.uo_out[0:1]
 
     try:
         await with_timeout(RisingEdge(pwm_bit), timeout_us, 'us')
@@ -269,7 +269,6 @@ async def test_pwm_duty(dut):
     duty_cycle = (t_fall_1 - t_rise_1) / (t_rise_2 - t_rise_1)
     dut._log.info(f"Measured duty cycle: {duty_cycle}%")
     assert duty_cycle > 49 and duty_cycle < 51, f"measured duty cycle out of expected range: {duty_cycle}%"
-    
 
     # 0% duty cycle test - always low
     dut._log.info("Enable PWM on uo_out pin 0 - Write 0x01 to addr 0x02")
@@ -281,8 +280,6 @@ async def test_pwm_duty(dut):
     await ClockCycles(dut.clk, 30000)
 
     assert dut.uo_out[0] == 0, f"Expected output low, got output high"
-
-    pwm_bit = dut.uo_out.get_slice(0, 1)
 
     try:
         await with_timeout(RisingEdge(pwm_bit), timeout_us, 'us')
@@ -300,8 +297,6 @@ async def test_pwm_duty(dut):
     await ClockCycles(dut.clk, 30000)
 
     assert dut.uo_out[0] == 1, f"Expected output high, got output low"
-
-    pwm_bit = dut.uo_out.get_slice(0, 1)
 
     try:
         await with_timeout(FallingEdge(pwm_bit), timeout_us, 'us')
