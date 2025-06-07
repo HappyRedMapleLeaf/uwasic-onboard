@@ -198,15 +198,15 @@ async def test_pwm_freq(dut):
     await ClockCycles(dut.clk, 30000)
 
     if not await RisingEdgeBit(dut.uo_out, 0, dut.clk, 1000):
-        await False, "1st rising edge wait timeout"
+        assert False, "1st rising edge wait timeout"
     t1 = get_sim_time(units="ps")
 
     if not await RisingEdgeBit(dut.uo_out, 0, dut.clk, 1000):
-        await False, "2nd rising edge wait timeout"
+        assert False, "2nd rising edge wait timeout"
     t2 = get_sim_time(units="ps")
     
     if not await RisingEdgeBit(dut.uo_out, 0, dut.clk, 1000):
-        await False, "3rd rising edge wait timeout"
+        assert False, "3rd rising edge wait timeout"
     t3 = get_sim_time(units="ps")
 
     f1 = 1e12 / (t2 - t1)
