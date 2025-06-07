@@ -87,16 +87,21 @@ async def send_spi_transaction(dut, r_w, address, data):
     await ClockCycles(dut.clk, 600)
     return ui_in_logicarray(ncs, bit, sclk)
 
-async def RisingEdgeBit(signal, bit_index, clk):
+# returns True rising edge was hit, False if timeout
+async def RisingEdgeBit(signal, bit_index, clk, timeout_us):
+    start_time = get_sim_time(units="us")
+
     prev = (int(signal.value) >> bit_index) & 1
 
-    while True:
-        await RisingEdge(clk)
+    while get_sim_time(units="us") - start_time < timeout_us:
+        await ClockCycles(clk, 1)
 
         curr = (int(signal.value) >> bit_index) & 1
         if prev == 0 and curr == 1:
-            return
+            return True
         prev = curr
+
+    return False
 
 @cocotb.test()
 async def test_spi(dut):
@@ -183,22 +188,25 @@ async def test_pwm_freq(dut):
     await ClockCycles(dut.clk, 5)
     dut.rst_n.value = 1
     await ClockCycles(dut.clk, 5)
-
-    dut._log.info("Enable PWM on uo_out pin 0 - Write 0x01 to addr 0x02")
-    ui_in_val = await send_spi_transaction(dut, 1, 0x02, 0x01)
-    await ClockCycles(dut.clk, 30000)
     
     dut._log.info("Set 50% duty cycle - Write 0x80 to addr 0x04")
     ui_in_val = await send_spi_transaction(dut, 1, 0x04, 0x80)
     await ClockCycles(dut.clk, 30000)
 
-    await RisingEdgeBit(dut.uo_out, 0, dut.clk)
+    dut._log.info("Enable PWM on uo_out pin 0 - Write 0x01 to addr 0x02")
+    ui_in_val = await send_spi_transaction(dut, 1, 0x02, 0x01)
+    await ClockCycles(dut.clk, 30000)
+
+    if not await RisingEdgeBit(dut.uo_out, 0, dut.clk, 1000):
+        await False, "1st rising edge wait timeout"
     t1 = get_sim_time(units="ps")
 
-    await RisingEdgeBit(dut.uo_out, 0, dut.clk)
+    if not await RisingEdgeBit(dut.uo_out, 0, dut.clk, 1000):
+        await False, "2nd rising edge wait timeout"
     t2 = get_sim_time(units="ps")
     
-    await RisingEdgeBit(dut.uo_out, 0, dut.clk)
+    if not await RisingEdgeBit(dut.uo_out, 0, dut.clk, 1000):
+        await False, "3rd rising edge wait timeout"
     t3 = get_sim_time(units="ps")
 
     f1 = 1e12 / (t2 - t1)
