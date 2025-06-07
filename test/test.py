@@ -87,8 +87,12 @@ async def send_spi_transaction(dut, r_w, address, data):
     await ClockCycles(dut.clk, 600)
     return ui_in_logicarray(ncs, bit, sclk)
 
+timeout_us = 1000 # longer than 3kHz period
+EDGE_FALLING = 0
+EDGE_RISING = 1
+
 # returns True rising edge was hit, False if timeout
-async def RisingEdgeBit(signal, bit_index, clk, timeout_us):
+async def WaitEdge(signal, bit_index, clk, timeout_us, edge):
     start_time = get_sim_time(units="us")
 
     prev = (int(signal.value) >> bit_index) & 1
@@ -97,7 +101,8 @@ async def RisingEdgeBit(signal, bit_index, clk, timeout_us):
         await ClockCycles(clk, 1)
 
         curr = (int(signal.value) >> bit_index) & 1
-        if prev == 0 and curr == 1:
+        if (edge == EDGE_RISING and prev == 0 and curr == 1) or \
+           (edge == EDGE_FALLING and prev == 1 and curr == 0):
             return True
         prev = curr
 
@@ -193,32 +198,33 @@ async def test_pwm_freq(dut):
     ui_in_val = await send_spi_transaction(dut, 1, 0x04, 0x80)
     await ClockCycles(dut.clk, 30000)
 
-    dut._log.info("Enable PWM on uo_out pin 0 - Write 0x01 to addr 0x02")
-    ui_in_val = await send_spi_transaction(dut, 1, 0x02, 0x01)
-    await ClockCycles(dut.clk, 30000)
+    for bit in range(8):
+        dut._log.info(f"Enable PWM on uo_out pin {bit} - Write {0x01 << bit} to addr 0x02")
+        ui_in_val = await send_spi_transaction(dut, 1, 0x02, {0x01 << bit})
+        await ClockCycles(dut.clk, 30000)
 
-    dut._log.info("Enable output on uo_out pin 0 - Write 0x01 to addr 0x00")
-    ui_in_val = await send_spi_transaction(dut, 1, 0x00, 0x01)
-    await ClockCycles(dut.clk, 30000)
+        dut._log.info(f"Enable output on uo_out pin {bit} - Write {0x01 << bit} to addr 0x00")
+        ui_in_val = await send_spi_transaction(dut, 1, 0x00, {0x01 << bit})
+        await ClockCycles(dut.clk, 30000)
 
-    if not await RisingEdgeBit(dut.uo_out, 0, dut.clk, 1000):
-        assert False, "1st rising edge wait timeout"
-    t1 = get_sim_time(units="ps")
+        if not await WaitEdge(dut.uo_out, bit, dut.clk, timeout_us, EDGE_RISING):
+            assert False, "1st rising edge wait timeout"
+        t1 = get_sim_time(units="ps")
 
-    if not await RisingEdgeBit(dut.uo_out, 0, dut.clk, 1000):
-        assert False, "2nd rising edge wait timeout"
-    t2 = get_sim_time(units="ps")
-    
-    if not await RisingEdgeBit(dut.uo_out, 0, dut.clk, 1000):
-        assert False, "3rd rising edge wait timeout"
-    t3 = get_sim_time(units="ps")
+        if not await WaitEdge(dut.uo_out, bit, dut.clk, timeout_us, EDGE_RISING):
+            assert False, "2nd rising edge wait timeout"
+        t2 = get_sim_time(units="ps")
+        
+        if not await WaitEdge(dut.uo_out, bit, dut.clk, timeout_us, EDGE_RISING):
+            assert False, "3rd rising edge wait timeout"
+        t3 = get_sim_time(units="ps")
 
-    f1 = 1e12 / (t2 - t1)
-    f2 = 1e12 / (t3 - t2)
+        f1 = 1e12 / (t2 - t1)
+        f2 = 1e12 / (t3 - t2)
 
-    dut._log.info(f"Measured frequencies: f1={f1:.2f} Hz, f2={f2:.2f} Hz")
-    assert f1 > 2970 and f1 < 3030, f"first measured frequency out of expected range: {f1} Hz"
-    assert f2 > 2970 and f2 < 3030, f"second measured frequency out of expected range: {f2} Hz"
+        dut._log.info(f"Measured frequencies: f1={f1:.2f} Hz, f2={f2:.2f} Hz")
+        assert f1 > 2970 and f1 < 3030, f"first measured frequency out of expected range: {f1} Hz"
+        assert f2 > 2970 and f2 < 3030, f"second measured frequency out of expected range: {f2} Hz"
 
     dut._log.info("PWM Frequency test completed successfully")
 
@@ -226,91 +232,104 @@ async def test_pwm_freq(dut):
 async def test_pwm_duty(dut):
     dut._log.info("Start PWM Duty Cycle test")
 
-    # # Wait value much longer than 3kHz period
-    # timeout_us = 1000
+    # Set the clock period to 100 ns (10 MHz)
+    clock = Clock(dut.clk, 100, units="ns")
+    cocotb.start_soon(clock.start())
 
-    # # Set the clock period to 100 ns (10 MHz)
-    # clock = Clock(dut.clk, 100, units="ns")
-    # cocotb.start_soon(clock.start())
+    # Reset
+    dut._log.info("Reset")
+    dut.ena.value = 1
+    ncs = 1
+    bit = 0
+    sclk = 0
+    dut.ui_in.value = ui_in_logicarray(ncs, bit, sclk)
+    dut.rst_n.value = 0
+    await ClockCycles(dut.clk, 5)
+    dut.rst_n.value = 1
+    await ClockCycles(dut.clk, 5)
 
-    # # Reset
-    # dut._log.info("Reset")
-    # dut.ena.value = 1
-    # ncs = 1
-    # bit = 0
-    # sclk = 0
-    # dut.ui_in.value = ui_in_logicarray(ncs, bit, sclk)
-    # dut.rst_n.value = 0
-    # await ClockCycles(dut.clk, 5)
-    # dut.rst_n.value = 1
-    # await ClockCycles(dut.clk, 5)
+    for bit in range(8):
+        # 50% duty cycle test
+        dut._log.info(f"Enable PWM on uo_out pin {bit} - Write {0x01 << bit} to addr 0x02")
+        ui_in_val = await send_spi_transaction(dut, 1, 0x02, {0x01 << bit})
+        await ClockCycles(dut.clk, 30000)
 
-    # # 50% duty cycle test
-    # dut._log.info("Enable PWM on uo_out pin 0 - Write 0x01 to addr 0x02")
-    # ui_in_val = await send_spi_transaction(dut, 1, 0x02, 0x01)
-    # await ClockCycles(dut.clk, 30000)
+        dut._log.info(f"Enable output on uo_out pin {bit} - Write {0x01 << bit} to addr 0x00")
+        ui_in_val = await send_spi_transaction(dut, 1, 0x00, {0x01 << bit})
+        await ClockCycles(dut.clk, 30000)
     
-    # dut._log.info("Set 50% duty cycle - Write 0x80 to addr 0x04")
-    # ui_in_val = await send_spi_transaction(dut, 1, 0x04, 0x80)
-    # await ClockCycles(dut.clk, 30000)
+        dut._log.info("Set 50% duty cycle - Write 0x80 to addr 0x04")
+        ui_in_val = await send_spi_transaction(dut, 1, 0x04, 0x80)
+        await ClockCycles(dut.clk, 30000)
 
-    # pwm_bit = dut.uo_out[0:1]
+        if not await WaitEdge(dut.uo_out, bit, dut.clk, timeout_us, EDGE_RISING):
+            assert False, "1st rising edge wait timeout"
+        t_rise_1 = get_sim_time(units="ps")
 
-    # try:
-    #     await with_timeout(RisingEdge(pwm_bit), timeout_us, 'us')
-    # except SimTimeoutError:
-    #     assert False, "Timed out waiting for first rising edge on pwm_bit"
-    # t_rise_1 = get_sim_time(units="ps")
+        if not await WaitEdge(dut.uo_out, bit, dut.clk, timeout_us, EDGE_FALLING):
+            assert False, "1st falling edge wait timeout"
+        t_fall_1 = get_sim_time(units="ps")
 
-    # try:
-    #     await with_timeout(FallingEdge(pwm_bit), timeout_us, 'us')
-    # except SimTimeoutError:
-    #     assert False, "Timed out waiting for first falling edge on pwm_bit"
-    # t_fall_1 = get_sim_time(units="ps")
+        if not await WaitEdge(dut.uo_out, bit, dut.clk, timeout_us, EDGE_RISING):
+            assert False, "2nd rising edge wait timeout"
+        t_rise_2 = get_sim_time(units="ps")
 
-    # try:
-    #     await with_timeout(RisingEdge(pwm_bit), timeout_us, 'us')
-    # except SimTimeoutError:
-    #     assert False, "Timed out waiting for second rising edge on pwm_bit"
-    # t_rise_2 = get_sim_time(units="ps")
+        dut._log.info(f"Disable PWM on uo_out pin {bit} - Write 0x00 to addr 0x02")
+        ui_in_val = await send_spi_transaction(dut, 1, 0x02, 0x00)
+        await ClockCycles(dut.clk, 30000)
 
-    # duty_cycle = (t_fall_1 - t_rise_1) / (t_rise_2 - t_rise_1)
-    # dut._log.info(f"Measured duty cycle: {duty_cycle}%")
-    # assert duty_cycle > 49 and duty_cycle < 51, f"measured duty cycle out of expected range: {duty_cycle}%"
+        dut._log.info(f"Disable output on uo_out pin {bit} - Write 0x00 to addr 0x00")
+        ui_in_val = await send_spi_transaction(dut, 1, 0x00, 0x00)
+        await ClockCycles(dut.clk, 30000)
 
-    # # 0% duty cycle test - always low
-    # dut._log.info("Enable PWM on uo_out pin 0 - Write 0x01 to addr 0x02")
-    # ui_in_val = await send_spi_transaction(dut, 1, 0x02, 0x01)
-    # await ClockCycles(dut.clk, 30000)
-    
-    # dut._log.info("Set 0% duty cycle - Write 0x00 to addr 0x04")
-    # ui_in_val = await send_spi_transaction(dut, 1, 0x04, 0x00)
-    # await ClockCycles(dut.clk, 30000)
+        duty_cycle = (t_fall_1 - t_rise_1) / (t_rise_2 - t_rise_1)
+        dut._log.info(f"Measured duty cycle: {duty_cycle}%")
+        assert duty_cycle > 49 and duty_cycle < 51, f"measured duty cycle out of expected range: {duty_cycle}%"
 
-    # assert dut.uo_out[0] == 0, f"Expected output low, got output high"
+        # 0% duty cycle test - always low
+        dut._log.info(f"Enable PWM on uo_out pin {bit} - Write {0x01 << bit} to addr 0x02")
+        ui_in_val = await send_spi_transaction(dut, 1, 0x02, {0x01 << bit})
+        await ClockCycles(dut.clk, 30000)
+        
+        dut._log.info("Set 0% duty cycle - Write 0x00 to addr 0x04")
+        ui_in_val = await send_spi_transaction(dut, 1, 0x04, 0x00)
+        await ClockCycles(dut.clk, 30000)
 
-    # try:
-    #     await with_timeout(RisingEdge(pwm_bit), timeout_us, 'us')
-    #     assert False, f"Unexpected rising edge detected on uo_out[0] within {timeout_us} us"
-    # except SimTimeoutError:
-    #     dut._log.info(f"No rising edge detected on uo_out[0] in {timeout_us} us. We good!")
+        assert dut.uo_out[0] == 0, f"Expected output low, got output high"
 
-    # # 100% duty cycle test - always high
-    # dut._log.info("Enable PWM on uo_out pin 0 - Write 0x01 to addr 0x02")
-    # ui_in_val = await send_spi_transaction(dut, 1, 0x02, 0x01)
-    # await ClockCycles(dut.clk, 30000)
-    
-    # dut._log.info("Set 100% duty cycle - Write 0xFF to addr 0x04")
-    # ui_in_val = await send_spi_transaction(dut, 1, 0x04, 0xFF)
-    # await ClockCycles(dut.clk, 30000)
+        if await WaitEdge(dut.uo_out, bit, dut.clk, timeout_us, EDGE_RISING):
+            assert False, f"Unexpected rising edge detected on uo_out[{bit}] within {timeout_us} us"
+        dut._log.info(f"No rising edge detected on uo_out[{bit}] in {timeout_us} us. We good!")
 
-    # assert dut.uo_out[0] == 1, f"Expected output high, got output low"
+        dut._log.info(f"Disable PWM on uo_out pin {bit} - Write 0x00 to addr 0x02")
+        ui_in_val = await send_spi_transaction(dut, 1, 0x02, 0x00)
+        await ClockCycles(dut.clk, 30000)
 
-    # try:
-    #     await with_timeout(FallingEdge(pwm_bit), timeout_us, 'us')
-    #     assert False, f"Unexpected falling edge detected on uo_out[0] within {timeout_us} us"
-    # except SimTimeoutError:
-    #     dut._log.info(f"No falling edge detected on uo_out[0] in {timeout_us} us. We good!")
+        dut._log.info(f"Disable output on uo_out pin {bit} - Write 0x00 to addr 0x00")
+        ui_in_val = await send_spi_transaction(dut, 1, 0x00, 0x00)
+        await ClockCycles(dut.clk, 30000)
 
-    # Write your test here
+        # 100% duty cycle test - always high
+        dut._log.info(f"Enable PWM on uo_out pin {bit} - Write {0x01 << bit} to addr 0x02")
+        ui_in_val = await send_spi_transaction(dut, 1, 0x02, {0x01 << bit})
+        await ClockCycles(dut.clk, 30000)
+        
+        dut._log.info("Set 100% duty cycle - Write 0xFF to addr 0x04")
+        ui_in_val = await send_spi_transaction(dut, 1, 0x04, 0xFF)
+        await ClockCycles(dut.clk, 30000)
+
+        assert dut.uo_out[0] == 1, f"Expected output high, got output low"
+
+        if await WaitEdge(dut.uo_out, bit, dut.clk, timeout_us, EDGE_FALLING):
+            assert False, f"Unexpected falling edge detected on uo_out[{bit}] within {timeout_us} us"
+        dut._log.info(f"No falling edge detected on uo_out[{bit}] in {timeout_us} us. We good!")
+
+        dut._log.info(f"Disable PWM on uo_out pin {bit} - Write 0x00 to addr 0x02")
+        ui_in_val = await send_spi_transaction(dut, 1, 0x02, 0x00)
+        await ClockCycles(dut.clk, 30000)
+
+        dut._log.info(f"Disable output on uo_out pin {bit} - Write 0x00 to addr 0x00")
+        ui_in_val = await send_spi_transaction(dut, 1, 0x00, 0x00)
+        await ClockCycles(dut.clk, 30000)
+
     dut._log.info("PWM Duty Cycle test completed successfully")
