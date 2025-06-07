@@ -200,11 +200,11 @@ async def test_pwm_freq(dut):
 
     for bit in range(8):
         dut._log.info(f"Enable PWM on uo_out pin {bit} - Write {0x01 << bit} to addr 0x02")
-        ui_in_val = await send_spi_transaction(dut, 1, 0x02, {0x01 << bit})
+        ui_in_val = await send_spi_transaction(dut, 1, 0x02, 0x01 << bit)
         await ClockCycles(dut.clk, 30000)
 
         dut._log.info(f"Enable output on uo_out pin {bit} - Write {0x01 << bit} to addr 0x00")
-        ui_in_val = await send_spi_transaction(dut, 1, 0x00, {0x01 << bit})
+        ui_in_val = await send_spi_transaction(dut, 1, 0x00, 0x01 << bit)
         await ClockCycles(dut.clk, 30000)
 
         if not await WaitEdge(dut.uo_out, bit, dut.clk, timeout_us, EDGE_RISING):
@@ -250,16 +250,16 @@ async def test_pwm_duty(dut):
 
     for bit in range(8):
         # 50% duty cycle test
+        dut._log.info("Set 50% duty cycle - Write 0x80 to addr 0x04")
+        ui_in_val = await send_spi_transaction(dut, 1, 0x04, 0x80)
+        await ClockCycles(dut.clk, 30000)
+
         dut._log.info(f"Enable PWM on uo_out pin {bit} - Write {0x01 << bit} to addr 0x02")
         ui_in_val = await send_spi_transaction(dut, 1, 0x02, 0x01 << bit)
         await ClockCycles(dut.clk, 30000)
 
         dut._log.info(f"Enable output on uo_out pin {bit} - Write {0x01 << bit} to addr 0x00")
         ui_in_val = await send_spi_transaction(dut, 1, 0x00, 0x01 << bit)
-        await ClockCycles(dut.clk, 30000)
-    
-        dut._log.info("Set 50% duty cycle - Write 0x80 to addr 0x04")
-        ui_in_val = await send_spi_transaction(dut, 1, 0x04, 0x80)
         await ClockCycles(dut.clk, 30000)
 
         if not await WaitEdge(dut.uo_out, bit, dut.clk, timeout_us, EDGE_RISING):
@@ -287,12 +287,16 @@ async def test_pwm_duty(dut):
         assert duty_cycle > 0.49 and duty_cycle < 0.51, f"measured duty cycle out of expected range: {duty_cycle}%"
 
         # 0% duty cycle test - always low
+        dut._log.info("Set 0% duty cycle - Write 0x00 to addr 0x04")
+        ui_in_val = await send_spi_transaction(dut, 1, 0x04, 0x00)
+        await ClockCycles(dut.clk, 30000)
+
         dut._log.info(f"Enable PWM on uo_out pin {bit} - Write {0x01 << bit} to addr 0x02")
         ui_in_val = await send_spi_transaction(dut, 1, 0x02, 0x01 << bit)
         await ClockCycles(dut.clk, 30000)
-        
-        dut._log.info("Set 0% duty cycle - Write 0x00 to addr 0x04")
-        ui_in_val = await send_spi_transaction(dut, 1, 0x04, 0x00)
+
+        dut._log.info(f"Enable output on uo_out pin {bit} - Write {0x01 << bit} to addr 0x00")
+        ui_in_val = await send_spi_transaction(dut, 1, 0x00, 0x01 << bit)
         await ClockCycles(dut.clk, 30000)
 
         assert dut.uo_out[0] == 0, f"Expected output low, got output high"
@@ -310,12 +314,16 @@ async def test_pwm_duty(dut):
         await ClockCycles(dut.clk, 30000)
 
         # 100% duty cycle test - always high
+        dut._log.info("Set 100% duty cycle - Write 0xFF to addr 0x04")
+        ui_in_val = await send_spi_transaction(dut, 1, 0x04, 0xFF)
+        await ClockCycles(dut.clk, 30000)
+
         dut._log.info(f"Enable PWM on uo_out pin {bit} - Write {0x01 << bit} to addr 0x02")
         ui_in_val = await send_spi_transaction(dut, 1, 0x02, 0x01 << bit)
         await ClockCycles(dut.clk, 30000)
-        
-        dut._log.info("Set 100% duty cycle - Write 0xFF to addr 0x04")
-        ui_in_val = await send_spi_transaction(dut, 1, 0x04, 0xFF)
+
+        dut._log.info(f"Enable output on uo_out pin {bit} - Write {0x01 << bit} to addr 0x00")
+        ui_in_val = await send_spi_transaction(dut, 1, 0x00, 0x01 << bit)
         await ClockCycles(dut.clk, 30000)
 
         assert dut.uo_out[0] == 1, f"Expected output high, got output low"
