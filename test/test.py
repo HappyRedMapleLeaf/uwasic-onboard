@@ -299,7 +299,7 @@ async def test_pwm_duty(dut):
         ui_in_val = await send_spi_transaction(dut, 1, 0x00, 0x01 << bit)
         await ClockCycles(dut.clk, 30000)
 
-        assert dut.uo_out[0] == 0, f"Expected output low, got output high"
+        assert dut.uo_out[bit] == 0, f"Expected output low, got output high"
 
         if await WaitEdge(dut.uo_out, bit, dut.clk, timeout_us, EDGE_RISING):
             assert False, f"Unexpected rising edge detected on uo_out[{bit}] within {timeout_us} us"
