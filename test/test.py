@@ -284,7 +284,7 @@ async def test_pwm_duty(dut):
 
         duty_cycle = (t_fall_1 - t_rise_1) / (t_rise_2 - t_rise_1)
         dut._log.info(f"Measured duty cycle: {duty_cycle}%")
-        assert duty_cycle > 49 and duty_cycle < 51, f"measured duty cycle out of expected range: {duty_cycle}%"
+        assert duty_cycle > 0.49 and duty_cycle < 0.51, f"measured duty cycle out of expected range: {duty_cycle}%"
 
         # 0% duty cycle test - always low
         dut._log.info(f"Enable PWM on uo_out pin {bit} - Write {0x01 << bit} to addr 0x02")
