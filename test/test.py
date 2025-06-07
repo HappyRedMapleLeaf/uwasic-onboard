@@ -197,6 +197,10 @@ async def test_pwm_freq(dut):
     ui_in_val = await send_spi_transaction(dut, 1, 0x02, 0x01)
     await ClockCycles(dut.clk, 30000)
 
+    dut._log.info("Enable output on uo_out pin 0 - Write 0x01 to addr 0x00")
+    ui_in_val = await send_spi_transaction(dut, 1, 0x00, 0x01)
+    await ClockCycles(dut.clk, 30000)
+
     if not await RisingEdgeBit(dut.uo_out, 0, dut.clk, 1000):
         assert False, "1st rising edge wait timeout"
     t1 = get_sim_time(units="ps")
